@@ -112,7 +112,7 @@ class HttpServer
                     }
                     catch
                     {
-                        Response.Fail(resp, "file doesn't exist");
+                        Response.Fail(resp, "couldn't delete file");
                     }
                 }
                 else
