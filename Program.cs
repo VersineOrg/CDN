@@ -1,6 +1,5 @@
 using System.Net;
 using FFMpegCore;
-using FFMpegCore.Enums;
 using FFMpegCore.Pipes;
 using Newtonsoft.Json;
 using SixLabors.ImageSharp;
