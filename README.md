@@ -10,6 +10,10 @@ this is the content delivery network of Versine, it stores and deletes images
 
 ### add a file to the CDN
 
+#### endpoint 
+
+/addFile
+
 #### method
 
 POST
@@ -40,6 +44,9 @@ fail :
 
 ### delete a file from the CDN
 
+#### endpoint 
+
+/deleteFile
 
 #### method
 
