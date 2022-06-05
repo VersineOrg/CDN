@@ -1,0 +1,7 @@
+/.idea
+/obj
+/bin
+/.vscode
+/Properties
+appsettings.json
+appsettings.Development.json
