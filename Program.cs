@@ -1,4 +1,7 @@
 using System.Net;
+using FFMpegCore;
+using FFMpegCore.Enums;
+using FFMpegCore.Pipes;
 using Newtonsoft.Json;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Webp;
@@ -19,7 +22,7 @@ class HttpServer
             .Select(s => s[random.Next(s.Length)]).ToArray());
     }
 
-    public static async Task HandleIncomingConnections(string picutre_folder)
+    public static async Task HandleIncomingConnections(string picutre_folder, uint maxSize)
     {
         while (true)
         {
@@ -38,49 +41,97 @@ class HttpServer
             {
                 StreamReader reader = new StreamReader(req.InputStream);
                 string bodyString = await reader.ReadToEndAsync();
-                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+                dynamic body;
+                try
+                {
+                    body = JsonConvert.DeserializeObject(bodyString)!;
+                }
+                catch
+                {
+                    Response.Fail(resp, "bad request");
+                    resp.Close();
+                    continue;
+                }
 
                 string data;
+                string allowVideos;
                 try
                 {
                     data = ((string) body.data).Trim();
+                    allowVideos = ((string) body.allowVideos).Trim();
                 }
                 catch
                 {
                     data = "";
+                    allowVideos = "";
                 }
 
-                if (string.Equals(data, ""))
+                if (data.Length > maxSize*1_000_000)
                 {
-                    Response.Fail(resp, "invalid body");
+                    Response.Fail(resp, "the file is too big");
                 }
                 else
                 {
-                    string filename = "";
-                    string filePath = "";
-                    do
+                    if (string.Equals(data, ""))
                     {
-                        filename = RandomString();
-                        filePath = Path.Join(picutre_folder, filename + ".webp");
-                    } while (File.Exists(filePath));
-
-                    try
+                        Response.Fail(resp, "invalid body");
+                    }
+                    else
                     {
-                        byte[] imageBytes = Convert.FromBase64String(data);
-
-                        using (Image image = Image.Load(imageBytes))
+                        string filename = "";
+                        string filePath = "";
+                        do
                         {
-                            // Remove metadata
-                            image.Metadata.ExifProfile = null;
-                            // Save image as webp
-                            await image.SaveAsWebpAsync(filePath, new WebpEncoder() {Quality = 100});
+                            filename = RandomString();
+                            filePath = Path.Join(picutre_folder, filename);
+                        } while (File.Exists(filePath));
+
+                        byte[] imageBytes;
+                        try
+                        {
+                            imageBytes = Convert.FromBase64String(data);
+                        }
+                        catch
+                        {
+                            Response.Fail(resp, "invalid data");
+                            resp.Close();
+                            continue;
                         }
 
-                        Response.Success(resp, "saved file", filename);
-                    }
-                    catch
-                    {
-                        Response.Fail(resp, "image format isn't supported");
+                        try
+                        {
+                            if (!string.Equals(allowVideos, "true"))
+                            {
+                                throw new Exception();
+                            }
+                            await FFMpegArguments
+                                .FromPipeInput(new StreamPipeSource(new MemoryStream(imageBytes)))
+                                .OutputToFile(filePath, false, options => options
+                                    .WithVideoCodec("vp9")
+                                    .ForceFormat("webm")
+                                    .WithFastStart())
+                                .ProcessAsynchronously();
+                            Response.Success(resp, "saved video", filename);
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                using (Image image = Image.Load(imageBytes))
+                                {
+                                    // Remove metadata
+                                    image.Metadata.ExifProfile = null;
+                                    // Save image as webp
+                                    await image.SaveAsWebpAsync(filePath, new WebpEncoder() {Quality = 100});
+                                }
+
+                                Response.Success(resp, "saved image", filename);
+                            }
+                            catch
+                            {
+                                Response.Fail(resp, "image or video format isn't supported");
+                            }
+                        }
                     }
                 }
             }
@@ -102,7 +153,7 @@ class HttpServer
                     id = "";
                 }
 
-                string filePath = Path.Join(picutre_folder, id + ".webp");
+                string filePath = Path.Join(picutre_folder, id);
                 if (File.Exists(filePath))
                 {
                     try
@@ -138,7 +189,7 @@ class HttpServer
                 }
 
 
-                string filePath = Path.Join(picutre_folder, id + ".webp");
+                string filePath = Path.Join(picutre_folder, id);
                 if (File.Exists(filePath))
                 {
                     try
@@ -175,7 +226,8 @@ class HttpServer
             .Build();
 
         // Get values from config file
-        string picture_folder = config.GetValue<String>("picture_folder") ?? "";
+        string pictureFolder = config.GetValue<String>("pictureFolder") ?? "";
+        uint maxSize = config.GetValue<uint>("maxSize");
 
         // Create a Http server and start listening for incoming connections
         string url = "http://*:" + config.GetValue<String>("Port") + "/";
@@ -184,7 +236,7 @@ class HttpServer
         listener.Start();
         Console.WriteLine("Listening for connections on {0}", url);
 
-        if (!Directory.Exists(picture_folder))
+        if (!Directory.Exists(pictureFolder))
         {
             // Error
             Console.Error.WriteLine("picture folder doesn't exist");
@@ -192,7 +244,7 @@ class HttpServer
         else
         {
             // Handle requests
-            Task listenTask = HandleIncomingConnections(picture_folder);
+            Task listenTask = HandleIncomingConnections(pictureFolder, maxSize);
             listenTask.GetAwaiter().GetResult();
         }
 
