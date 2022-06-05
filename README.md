@@ -80,10 +80,43 @@ fail :
 
 {
 	"status": "fail",
-	"message": "couldn't delete file",
-  "data": null
+	"message": "error_message",
+	"data": null
 }
 
+### Access a file from the CDN
+
+#### endpoint
+
+/getFile
+
+#### method
+
+POST
+
+#### body
+
+{
+  "id":"id_of_the_image_to_access"
+}
+
+#### server response
+
+success :
+
+{
+	"status": "success",
+	"message": "accessed file",
+	"data": "image_file_encoded_to_base64_string"
+}
+
+fail :
+
+{
+	"status": "fail",
+	"message": "error_message",
+	"data": null
+}
 
 ## configuration
 

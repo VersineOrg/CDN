@@ -63,11 +63,11 @@ class HttpServer
                         filename = RandomString();
                         filePath = Path.Join(picutre_folder, filename + ".webp");
                     } while (File.Exists(filePath));
-                    
+
                     try
                     {
                         byte[] imageBytes = Convert.FromBase64String(data);
-                     
+
                         using (Image image = Image.Load(imageBytes))
                         {
                             // Remove metadata
@@ -75,6 +75,7 @@ class HttpServer
                             // Save image as webp
                             await image.SaveAsWebpAsync(filePath, new WebpEncoder() {Quality = 100});
                         }
+
                         Response.Success(resp, "saved file", filename);
                     }
                     catch
@@ -101,7 +102,6 @@ class HttpServer
                     id = "";
                 }
 
-                
                 string filePath = Path.Join(picutre_folder, id + ".webp");
                 if (File.Exists(filePath))
                 {
@@ -118,6 +118,42 @@ class HttpServer
                 else
                 {
                     Response.Success(resp, "file doesn't exist", "");
+                }
+            }
+            // Get a file
+            else if (req.HttpMethod == "POST" && req.Url?.AbsolutePath == "/getFile")
+            {
+                StreamReader reader = new StreamReader(req.InputStream);
+                string bodyString = await reader.ReadToEndAsync();
+                dynamic body = JsonConvert.DeserializeObject(bodyString)!;
+
+                string id;
+                try
+                {
+                    id = ((string) body.id).Trim();
+                }
+                catch
+                {
+                    id = "";
+                }
+
+
+                string filePath = Path.Join(picutre_folder, id + ".webp");
+                if (File.Exists(filePath))
+                {
+                    try
+                    {
+                        Response.Success(resp, "accessed file",
+                            Convert.ToBase64String(await File.ReadAllBytesAsync(filePath)));
+                    }
+                    catch
+                    {
+                        Response.Fail(resp, "couldn't access file");
+                    }
+                }
+                else
+                {
+                    Response.Fail(resp, "file doesn't exist");
                 }
             }
             else
